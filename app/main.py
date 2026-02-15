@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 
+DATA_PATH = "data/medications.csv"
+
 # ------------------ SIDEBAR NAVIGATION ------------------
 
 st.sidebar.title("💊 Healthcare Monitoring System")
