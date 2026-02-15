@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import os
 
+from openai import OpenAI
+
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+
 DATA_PATH = "data/medications.csv"
 
 st.set_page_config(page_title="Medication Tracker")
@@ -49,3 +54,29 @@ if os.path.exists(DATA_PATH):
         st.info("No medications added yet.")
 else:
     st.warning("Medication file not found.")
+
+# ------------------ AI MEDICATION ASSISTANT ------------------
+
+st.subheader("🤖 Ask AI About Your Medication")
+
+user_question = st.text_area("Ask a question about any medication")
+
+if st.button("Ask AI"):
+    if user_question.strip() != "":
+        with st.spinner("Thinking..."):
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful medical assistant. Provide general medication information. Do not provide diagnosis."},
+                        {"role": "user", "content": user_question}
+                    ],
+                )
+
+                answer = response.choices[0].message.content
+                st.success(answer)
+
+            except Exception as e:
+                st.error("Error: " + str(e))
+    else:
+        st.warning("Please enter a question.")
