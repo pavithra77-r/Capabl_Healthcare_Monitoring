@@ -2,11 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 
-from openai import OpenAI
-
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-
 DATA_PATH = "data/medications.csv"
 
 st.set_page_config(page_title="Medication Tracker")
@@ -55,28 +50,37 @@ if os.path.exists(DATA_PATH):
 else:
     st.warning("Medication file not found.")
 
-# ------------------ AI MEDICATION ASSISTANT ------------------
+# ------------------ AI MEDICATION ASSISTANT (Mock Mode) ------------------
 
-st.subheader("🤖 Ask AI About Your Medication")
+st.subheader("🤖 AI Medication Assistant")
 
 user_question = st.text_area("Ask a question about any medication")
 
+def mock_ai_response(question):
+    question = question.lower()
+
+    if "paracetamol" in question:
+        return "Paracetamol is commonly used to relieve mild to moderate pain and reduce fever. It is generally safe when taken within recommended dosage limits."
+
+    elif "metformin" in question:
+        return "Metformin is used to manage type 2 diabetes. It helps control blood sugar levels by improving insulin sensitivity."
+
+    elif "side effect" in question:
+        return "Common medication side effects may include nausea, dizziness, or mild stomach upset. Always consult a healthcare professional for serious symptoms."
+
+    elif "dosage" in question:
+        return "Dosage depends on the medication type, patient age, and medical condition. Always follow your doctor's prescription instructions."
+
+    elif "food" in question:
+        return "Some medications should be taken with food to avoid stomach irritation, while others require an empty stomach. Please check your prescription guidelines."
+
+    else:
+        return "I am a virtual medication assistant. I can provide general information about common medications, usage, and precautions."
+
 if st.button("Ask AI"):
     if user_question.strip() != "":
-        with st.spinner("Thinking..."):
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful medical assistant. Provide general medication information. Do not provide diagnosis."},
-                        {"role": "user", "content": user_question}
-                    ],
-                )
-
-                answer = response.choices[0].message.content
-                st.success(answer)
-
-            except Exception as e:
-                st.error("Error: " + str(e))
+        with st.spinner("Analyzing..."):
+            response = mock_ai_response(user_question)
+            st.success(response)
     else:
         st.warning("Please enter a question.")
