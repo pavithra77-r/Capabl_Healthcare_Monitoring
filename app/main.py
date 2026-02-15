@@ -56,13 +56,32 @@ if page == "🏠 Dashboard":
         df = pd.read_csv(DATA_PATH)
 
         if not df.empty:
+
+            # ===== METRICS =====
+            total_meds = len(df)
+            unique_meds = df["name"].nunique()
+
+            # Count today's medications
+            from datetime import datetime
+            current_time = datetime.now().strftime("%H:%M")
+            today_count = len(df[df["time"] == current_time])
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric("💊 Total Entries", total_meds)
+            col2.metric("🧾 Unique Medications", unique_meds)
+            col3.metric("⏰ Scheduled Now", today_count)
+
+            st.divider()
+
+            # ===== TABLE =====
             st.subheader("📋 Your Medications")
             st.dataframe(df, use_container_width=True)
+
         else:
             st.info("No medications added yet.")
     else:
         st.warning("Medication file not found.")
-
 
 # ==============================
 # ADD MEDICATION
