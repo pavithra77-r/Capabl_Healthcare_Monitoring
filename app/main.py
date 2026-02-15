@@ -2,140 +2,17 @@ import streamlit as st
 import pandas as pd
 import os
 
+# ==============================
+# CONFIG
+# ==============================
 DATA_PATH = "data/medications.csv"
 
-# ------------------ SIDEBAR NAVIGATION ------------------
+# Ensure data folder exists
+os.makedirs("data", exist_ok=True)
 
-st.sidebar.title("💊 Healthcare Monitoring System")
-
-page = st.sidebar.radio(
-    "Navigate",
-    ["🏠 Dashboard", "➕ Add Medication", "🤖 AI Assistant"]
-)
-if page == "🏠 Dashboard":
-
-    st.title("📊 Medication Dashboard")
-
-    if os.path.exists(DATA_PATH):
-        df = pd.read_csv(DATA_PATH)
-
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No medications added yet.")
-    else:
-        st.warning("Medication file not found.")
-
-
-
-DATA_PATH = "data/medications.csv"
-
-st.set_page_config(page_title="Medication Tracker")
-
-st.title("💊 Medication Tracker")
-st.write("Add and track your daily medications easily.")
-
-# ------------------ ADD MEDICATION ------------------
-
-st.subheader("➕ Add Medication")
-
-with st.form("med_form"):
-    name = st.text_input("Medication Name")
-    time = st.time_input("Time to take medication")
-    dosage = st.text_input("Dosage (e.g., 1 tablet, 5ml)")
-
-    submit = st.form_submit_button("Add Medication")
-
-if submit:
-    if name.strip() != "" and dosage.strip() != "":
-        new_data = pd.DataFrame(
-            [[name, time.strftime("%H:%M"), dosage]],
-            columns=["name", "time", "dosage"]
-        )
-
-        if os.path.exists(DATA_PATH):
-            new_data.to_csv(DATA_PATH, mode="a", header=False, index=False)
-        else:
-            new_data.to_csv(DATA_PATH, index=False)
-
-        st.success("Medication added successfully ✅")
-    else:
-        st.error("Please fill all fields ❌")
-
-elif page == "➕ Add Medication":
-
-    st.title("➕ Add Medication")
-
-    with st.form("med_form"):
-        name = st.text_input("Medication Name")
-        time = st.time_input("Time to take medication")
-        dosage = st.text_input("Dosage (e.g., 1 tablet, 5ml)")
-
-        submit = st.form_submit_button("Add Medication")
-
-    if submit:
-        if name.strip() != "" and dosage.strip() != "":
-            new_data = pd.DataFrame(
-                [[name, time.strftime("%H:%M"), dosage]],
-                columns=["name", "time", "dosage"]
-            )
-
-            if os.path.exists(DATA_PATH):
-                new_data.to_csv(DATA_PATH, mode="a", header=False, index=False)
-            else:
-                new_data.to_csv(DATA_PATH, index=False)
-
-            st.success("Medication added successfully ✅")
-        else:
-            st.error("Please fill all fields ❌")
-
-elif page == "➕ Add Medication":
-
-    st.title("➕ Add Medication")
-
-    with st.form("med_form"):
-        name = st.text_input("Medication Name")
-        time = st.time_input("Time to take medication")
-        dosage = st.text_input("Dosage (e.g., 1 tablet, 5ml)")
-
-        submit = st.form_submit_button("Add Medication")
-
-    if submit:
-        if name.strip() != "" and dosage.strip() != "":
-            new_data = pd.DataFrame(
-                [[name, time.strftime("%H:%M"), dosage]],
-                columns=["name", "time", "dosage"]
-            )
-
-            if os.path.exists(DATA_PATH):
-                new_data.to_csv(DATA_PATH, mode="a", header=False, index=False)
-            else:
-                new_data.to_csv(DATA_PATH, index=False)
-
-            st.success("Medication added successfully ✅")
-        else:
-            st.error("Please fill all fields ❌")
-
-# ------------------ DISPLAY MEDICATIONS ------------------
-
-st.subheader("📋 Your Medications")
-
-if os.path.exists(DATA_PATH):
-    df = pd.read_csv(DATA_PATH)
-
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("No medications added yet.")
-else:
-    st.warning("Medication file not found.")
-
-# ------------------ AI MEDICATION ASSISTANT (Mock Mode) ------------------
-
-st.subheader("🤖 AI Medication Assistant")
-
-user_question = st.text_area("Ask a question about any medication")
-
+# ==============================
+# MOCK AI FUNCTION
+# ==============================
 def mock_ai_response(question):
     question = question.lower()
 
@@ -157,13 +34,71 @@ def mock_ai_response(question):
     else:
         return "I am a virtual medication assistant. I can provide general information about common medications, usage, and precautions."
 
-if st.button("Ask AI"):
-    if user_question.strip() != "":
-        with st.spinner("Analyzing..."):
-            response = mock_ai_response(user_question)
-            st.success(response)
+
+# ==============================
+# SIDEBAR NAVIGATION
+# ==============================
+st.sidebar.title("💊 Healthcare Monitoring System")
+
+page = st.sidebar.radio(
+    "Navigate",
+    ["🏠 Dashboard", "➕ Add Medication", "🤖 AI Assistant"]
+)
+
+# ==============================
+# DASHBOARD
+# ==============================
+if page == "🏠 Dashboard":
+
+    st.title("📊 Medication Dashboard")
+
+    if os.path.exists(DATA_PATH):
+        df = pd.read_csv(DATA_PATH)
+
+        if not df.empty:
+            st.subheader("📋 Your Medications")
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("No medications added yet.")
     else:
-        st.warning("Please enter a question.")
+        st.warning("Medication file not found.")
+
+
+# ==============================
+# ADD MEDICATION
+# ==============================
+elif page == "➕ Add Medication":
+
+    st.title("➕ Add Medication")
+
+    with st.form("med_form"):
+        name = st.text_input("Medication Name")
+        time = st.time_input("Time to take medication")
+        dosage = st.text_input("Dosage (e.g., 1 tablet, 5ml)")
+
+        submit = st.form_submit_button("Add Medication")
+
+    if submit:
+        if name.strip() != "" and dosage.strip() != "":
+            new_data = pd.DataFrame(
+                [[name, time.strftime("%H:%M"), dosage]],
+                columns=["name", "time", "dosage"]
+            )
+
+            if os.path.exists(DATA_PATH):
+                new_data.to_csv(DATA_PATH, mode="a", header=False, index=False)
+            else:
+                new_data.to_csv(DATA_PATH, index=False)
+
+            st.success("Medication added successfully ✅")
+            st.rerun()
+        else:
+            st.error("Please fill all fields ❌")
+
+
+# ==============================
+# AI ASSISTANT
+# ==============================
 elif page == "🤖 AI Assistant":
 
     st.title("🤖 AI Medication Assistant")
