@@ -180,75 +180,130 @@ def show_global_overdose_alerts():
 st.sidebar.markdown("## 🏥 HealthGuard")
 st.sidebar.markdown("---")
 
-# ─── Login / Role Selection ─────────────────────────────────────────────────────
+# ─── Login / Logout Section ────────────────────────────────────────────────────
 if st.session_state.current_user is None:
-    st.sidebar.markdown("### 🔐 Login")
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
+    # ─── NOT LOGGED IN - Show Login/Register ───
+    st.sidebar.markdown("### 🔐 Login / Register")
+    
+    username = st.sidebar.text_input("Username", key="login_username", placeholder="Enter username")
+    password = st.sidebar.text_input("Password", type="password", key="login_password", placeholder="Enter password")
     role = st.sidebar.selectbox("Role", ["patient", "doctor", "caregiver"], index=0)
-    if st.sidebar.button("🔑 Login"):
-        if not username or not password:
-            st.session_state.auth_message = "Please enter both username and password."
-        else:
-            user = authenticate_user(username, password)
-            if user:
-                st.session_state.current_user = user
-                st.session_state.auth_message = f"Logged in as {user['username']} ({user['role']})"
+    
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        if st.button("🔑 Login", use_container_width=True, key="login_btn"):
+            if not username or not password:
+                st.session_state.auth_message = "⚠️ Please enter both username and password."
             else:
-                st.session_state.auth_message = "Invalid credentials."
-
-    if st.sidebar.button("🧾 Register"):
-        if not username or not password:
-            st.session_state.auth_message = "Username and password cannot be empty."
-        elif len(password.encode('utf-8')) > 72:
-            st.session_state.auth_message = "Password is too long (max 72 bytes). Please use a shorter password."
-        else:
-            created = create_user(username, password, role=role)
-            if created:
-                st.session_state.auth_message = f"Created user {username}. Please log in."
+                user = authenticate_user(username, password)
+                if user:
+                    st.session_state.current_user = user
+                    st.session_state.auth_message = ""
+                    st.sidebar.success(f"✅ Welcome, {user['username']}!")
+                    st.rerun()
+                else:
+                    st.session_state.auth_message = "❌ Invalid credentials."
+    
+    with col2:
+        if st.button("📝 Register", use_container_width=True, key="register_btn"):
+            if not username or not password:
+                st.session_state.auth_message = "⚠️ Username and password required."
+            elif len(password.encode('utf-8')) > 72:
+                st.session_state.auth_message = "❌ Password too long (max 72 bytes)."
             else:
-                st.session_state.auth_message = "Username already exists or password is invalid."
-
+                created = create_user(username, password, role=role)
+                if created:
+                    st.session_state.auth_message = f"✅ Account created! Please login."
+                else:
+                    st.session_state.auth_message = "❌ Username already exists."
+    
+    # Display auth messages
     if st.session_state.auth_message:
-        st.sidebar.info(st.session_state.auth_message)
+        if "✅" in st.session_state.auth_message:
+            st.sidebar.success(st.session_state.auth_message)
+        elif "❌" in st.session_state.auth_message or "⚠️" in st.session_state.auth_message:
+            st.sidebar.error(st.session_state.auth_message)
+        else:
+            st.sidebar.info(st.session_state.auth_message)
+
 else:
-    st.sidebar.markdown(f"**Logged in as:** {st.session_state.current_user['username']} ({st.session_state.current_user['role']})")
-    if st.sidebar.button("🔓 Logout"):
+    # ─── LOGGED IN - Show User Profile & Logout ────────────────────────────────
+    st.sidebar.markdown("### 👤 User Profile")
+    
+    user_info = f"""
+**Username:** {st.session_state.current_user['username']}  
+**Role:** {st.session_state.current_user['role'].title()}
+"""
+    
+    if st.session_state.current_user.get('full_name'):
+        user_info += f"  \n**Name:** {st.session_state.current_user['full_name']}"
+    
+    st.sidebar.info(user_info)
+    
+    st.sidebar.markdown("---")
+    
+    # ─── LOGOUT BUTTON ───
+    if st.sidebar.button("🚪 Logout", use_container_width=True, type="primary", key="logout_btn"):
+        # Clear all session data
         st.session_state.current_user = None
-        st.session_state.auth_message = ""
+        st.session_state.auth_message = "👋 You have been logged out successfully!"
+        st.session_state.openai_api_key = ""  # Clear API key for security
+        
+        # Show success and redirect to login
+        st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚙️ AI Settings")
-api_key_input = st.sidebar.text_input(
-    "OpenAI API Key (optional)",
-    value=st.session_state.openai_api_key,
-    type="password",
-    help="Add your OpenAI key for full AI responses. Without it, the assistant uses smart rule-based mode.",
-)
-if api_key_input:
-    st.session_state.openai_api_key = api_key_input
-    st.sidebar.success("✅ API key saved!")
 
-st.sidebar.markdown("---")
-st.sidebar.info("💡 **Tip:** The Health Assistant can delete medications, check overdose risk, and remind you about doses — just ask!")
+# ─── AI Settings (Only show when logged in) ────────────────────────────────────
+if st.session_state.current_user is not None:
+    st.sidebar.markdown("### ⚙️ AI Settings")
+    api_key_input = st.sidebar.text_input(
+        "OpenAI API Key (optional)",
+        value=st.session_state.openai_api_key,
+        type="password",
+        help="Add your OpenAI key for full AI responses. Without it, the assistant uses smart rule-based mode.",
+        key="api_key_input"
+    )
+    if api_key_input:
+        st.session_state.openai_api_key = api_key_input
+        st.sidebar.success("✅ API key saved!")
 
-# ─── Navigation ─────────────────────────────────────────────────────────────────
-page = st.sidebar.radio(
-    "Navigate",
-    ["📊 Dashboard", "💊 Medications", "📈 Health Metrics", "🔎 Drug Information", "🤖 Health Assistant"],
-    label_visibility="collapsed",
-)
+    st.sidebar.markdown("---")
+    st.sidebar.info("💡 **Tip:** The Health Assistant can delete medications, check overdose risk, and remind you about doses — just ask!")
+
+# ─── Navigation (Only show when logged in) ─────────────────────────────────────
+if st.session_state.current_user is not None:
+    page = st.sidebar.radio(
+        "Navigate",
+        ["📊 Dashboard", "💊 Medications", "📈 Health Metrics", "🔎 Drug Information", "🤖 Health Assistant"],
+        label_visibility="collapsed",
+    )
+else:
+    page = None
 
 # ─── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="main-header">🏥 HealthGuard Monitoring System</div>', unsafe_allow_html=True)
 
-# ─── Show global overdose alerts ───────────────────────────────────────────────
-show_global_overdose_alerts()
-
-# ─── Enforce login for the dashboard ───────────────────────────────────────────
+# ─── Enforce login ─────────────────────────────────────────────────────────────
 if st.session_state.current_user is None:
-    st.warning("Please log in on the sidebar to access the HealthGuard dashboard.")
+    st.info("👋 **Welcome to HealthGuard!**")
+    st.markdown("""
+    ### Please login or register to access your health dashboard.
+    
+    **Features:**
+    - 💊 Track your medications
+    - 📊 Monitor your health metrics
+    - 🤖 AI health assistant
+    - ⚠️ Overdose detection
+    - 🔍 Drug information lookup
+    
+    Use the **sidebar** on the left to get started! →
+    """)
     st.stop()
+
+# ─── Show global overdose alerts (only for logged-in users) ────────────────────
+show_global_overdose_alerts()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1: DASHBOARD
@@ -506,7 +561,7 @@ elif page == "🔎 Drug Information":
     st.caption("⚠️ For educational purposes only. Always consult a healthcare professional.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE 5: AI HEALTH ASSISTANT (UPGRADED)
+# PAGE 5: AI HEALTH ASSISTANT
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "🤖 Health Assistant":
     st.subheader("🤖 HealthGuard AI Assistant")
@@ -540,10 +595,14 @@ elif page == "🤖 Health Assistant":
                 st.session_state['prefill_chat'] = ex
 
         st.markdown("---")
-        if st.button("🗑️ Clear Chat History"):
-            clear_chat_history()
-            st.success("Chat cleared!")
-            st.rerun()
+        
+        # Only doctors/caregivers can clear chat
+        role = st.session_state.current_user.get('role') if st.session_state.current_user else None
+        if role in ["doctor", "caregiver"]:
+            if st.button("🗑️ Clear Chat History"):
+                clear_chat_history()
+                st.success("Chat cleared!")
+                st.rerun()
 
         # Show mode
         if st.session_state.openai_api_key:
@@ -559,7 +618,7 @@ elif page == "🤖 Health Assistant":
         if not history:
             chat_html += '<div style="text-align:center;color:#9aa8b8;padding:2rem;">👋 Say hello to get started!</div>'
         else:
-            for role, content, ts in history:
+            for role_msg, content, ts in history:
                 # Format timestamp
                 try:
                     dt_obj = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
@@ -567,7 +626,7 @@ elif page == "🤖 Health Assistant":
                 except Exception:
                     ts_display = ts
 
-                if role == "user":
+                if role_msg == "user":
                     chat_html += f'''
                     <div class="chat-msg-user">
                         {content}
@@ -621,8 +680,8 @@ st.sidebar.divider()
 st.sidebar.markdown("### ℹ️ About")
 st.sidebar.caption("""
 **HealthGuard** v2.0  
-Built with Streamlit + LangChain  
-Track A | Week 1-2 milestone ✅
+Built with Streamlit + Python  
+Healthcare Monitoring System
 
 ⚠️ For informational purposes only.  
 Always consult your doctor.
