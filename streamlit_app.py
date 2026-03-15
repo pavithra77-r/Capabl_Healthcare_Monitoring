@@ -3,14 +3,21 @@ import pandas as pd
 from datetime import datetime, time
 
 from utils.database import (
-    create_tables, add_medication, get_all_medications,
-    delete_medication, log_medication_taken, get_today_intake,
-    get_chat_history, clear_chat_history,
+    authenticate_user,
+    create_tables,
+    create_user,
+    add_medication,
+    get_all_medications,
+    delete_medication,
+    log_medication_taken,
+    get_today_intake,
+    get_chat_history,
+    clear_chat_history,
 )
 from utils.drug_info import (
     search_drug_info, get_indian_medicine_info, check_overdose_risk
 )
-from utils.health_agent import run_agent_with_history, run_simple_chat
+from utils.health_agent import run_agent_with_history, run_simple_chat, _validate_med_record
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -143,6 +150,12 @@ if 'chat_input' not in st.session_state:
 if 'openai_api_key' not in st.session_state:
     st.session_state.openai_api_key = ""
 
+# Role-based auth state
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = None
+if 'auth_message' not in st.session_state:
+    st.session_state.auth_message = ""
+
 # ─── Overdose Alert Banner (shown on all pages) ────────────────────────────────
 def show_global_overdose_alerts():
     meds = get_all_medications()
@@ -166,11 +179,43 @@ def show_global_overdose_alerts():
 # ─── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.markdown("## 🏥 HealthGuard")
 st.sidebar.markdown("---")
-page = st.sidebar.radio(
-    "Navigate",
-    ["📊 Dashboard", "💊 Medications", "📈 Health Metrics", "🔎 Drug Information", "🤖 Health Assistant"],
-    label_visibility="collapsed",
-)
+
+# ─── Login / Role Selection ─────────────────────────────────────────────────────
+if st.session_state.current_user is None:
+    st.sidebar.markdown("### 🔐 Login")
+    username = st.sidebar.text_input("Username")
+    password = st.sidebar.text_input("Password", type="password")
+    role = st.sidebar.selectbox("Role", ["patient", "doctor", "caregiver"], index=0)
+    if st.sidebar.button("🔑 Login"):
+        if not username or not password:
+            st.session_state.auth_message = "Please enter both username and password."
+        else:
+            user = authenticate_user(username, password)
+            if user:
+                st.session_state.current_user = user
+                st.session_state.auth_message = f"Logged in as {user['username']} ({user['role']})"
+            else:
+                st.session_state.auth_message = "Invalid credentials."
+
+    if st.sidebar.button("🧾 Register"):
+        if not username or not password:
+            st.session_state.auth_message = "Username and password cannot be empty."
+        elif len(password.encode('utf-8')) > 72:
+            st.session_state.auth_message = "Password is too long (max 72 bytes). Please use a shorter password."
+        else:
+            created = create_user(username, password, role=role)
+            if created:
+                st.session_state.auth_message = f"Created user {username}. Please log in."
+            else:
+                st.session_state.auth_message = "Username already exists or password is invalid."
+
+    if st.session_state.auth_message:
+        st.sidebar.info(st.session_state.auth_message)
+else:
+    st.sidebar.markdown(f"**Logged in as:** {st.session_state.current_user['username']} ({st.session_state.current_user['role']})")
+    if st.sidebar.button("🔓 Logout"):
+        st.session_state.current_user = None
+        st.session_state.auth_message = ""
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⚙️ AI Settings")
@@ -187,11 +232,23 @@ if api_key_input:
 st.sidebar.markdown("---")
 st.sidebar.info("💡 **Tip:** The Health Assistant can delete medications, check overdose risk, and remind you about doses — just ask!")
 
+# ─── Navigation ─────────────────────────────────────────────────────────────────
+page = st.sidebar.radio(
+    "Navigate",
+    ["📊 Dashboard", "💊 Medications", "📈 Health Metrics", "🔎 Drug Information", "🤖 Health Assistant"],
+    label_visibility="collapsed",
+)
+
 # ─── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="main-header">🏥 HealthGuard Monitoring System</div>', unsafe_allow_html=True)
 
 # ─── Show global overdose alerts ───────────────────────────────────────────────
 show_global_overdose_alerts()
+
+# ─── Enforce login for the dashboard ───────────────────────────────────────────
+if st.session_state.current_user is None:
+    st.warning("Please log in on the sidebar to access the HealthGuard dashboard.")
+    st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1: DASHBOARD
@@ -242,13 +299,19 @@ if page == "📊 Dashboard":
             intake = get_today_intake(name)
             taken_today = intake[0] if intake and intake[0] else 0
 
-            # Determine status
+            # Validate record for possible inconsistencies
+            warnings = _validate_med_record(med)
+            warning_note = "" if not warnings else f"⚠️ Data issue: {'; '.join(warnings)}"
+
+            # Determine status and detect any malformed time data
+            invalid_time_note = None
             try:
                 h, m = map(int, med_time_str.split(':'))
                 is_overdue = time(h, m) < now.time() and taken_today == 0
                 is_due_soon = not is_overdue and abs((h * 60 + m) - (now.hour * 60 + now.minute)) <= 30
             except Exception:
                 is_overdue = is_due_soon = False
+                invalid_time_note = "⚠️ Time format invalid (expected HH:MM). Please update this medication entry."
 
             card_class = "med-card overdue" if is_overdue else "med-card due-soon" if is_due_soon else "med-card"
             status_icon = "🔴" if is_overdue else "🟡" if is_due_soon else "🟢"
@@ -263,6 +326,8 @@ if page == "📊 Dashboard":
                         {frequency} &nbsp;·&nbsp; Taken today: {taken_today}x
                         {f'&nbsp;·&nbsp; ⚠️ <b>OVERDUE</b>' if is_overdue else ''}
                         {f'&nbsp;·&nbsp; ⏰ <b>DUE SOON</b>' if is_due_soon else ''}
+                        {f'<br><span style="color:#e67e22">{invalid_time_note}</span>' if invalid_time_note else ''}
+                        {f'<br><span style="color:#e67e22">{warning_note}</span>' if warning_note else ''}
                     </small>
                 </div>
                 """, unsafe_allow_html=True)
@@ -270,7 +335,13 @@ if page == "📊 Dashboard":
             with col_b:
                 # Check overdose risk before allowing mark as taken
                 risk = check_overdose_risk(name, taken_today, dosage)
-                if risk['severity'] == 'danger':
+                if warnings:
+                    st.warning(warning_note)
+                    st.button("✅ Taken", key=f"taken_{med_id}", disabled=True)
+                elif "Could not parse dosage" in risk.get('message', ''):
+                    st.warning(risk['message'])
+                    st.button("✅ Taken", key=f"taken_{med_id}", disabled=True)
+                elif risk['severity'] == 'danger':
                     st.error("🚨 Limit!")
                 elif st.button("✅ Taken", key=f"taken_{med_id}"):
                     log_medication_taken(med_id, name, dosage)
@@ -302,9 +373,12 @@ elif page == "💊 Medications":
             submitted = st.form_submit_button("➕ Add Medication", use_container_width=True)
             if submitted:
                 if med_name and dosage and frequency:
-                    add_medication(med_name, dosage, frequency, med_time.strftime("%H:%M"), notes, max_daily_dose)
-                    st.success(f"✅ {med_name} added!")
-                    st.balloons()
+                    try:
+                        add_medication(med_name, dosage, frequency, med_time.strftime("%H:%M"), notes, max_daily_dose)
+                        st.success(f"✅ {med_name} added!")
+                        st.balloons()
+                    except ValueError as e:
+                        st.error(f"❌ {e}")
                 else:
                     st.error("❌ Please fill in required fields.")
 
@@ -317,6 +391,9 @@ elif page == "💊 Medications":
                 taken_today = intake[0] if intake and intake[0] else 0
                 risk = check_overdose_risk(name, taken_today, dosage)
 
+                warnings = _validate_med_record(med)
+                warning_note = "" if not warnings else f"⚠️ Data issue: {'; '.join(warnings)}"
+
                 with st.expander(f"💊 {name} — {dosage} at {med_time}"):
                     c1, c2, c3 = st.columns([2, 2, 1])
                     with c1:
@@ -327,15 +404,21 @@ elif page == "💊 Medications":
                         st.write(f"**Notes:** {notes or 'None'}")
                         st.write(f"**Added:** {created}")
                         st.write(f"**Taken today:** {taken_today}x")
+                        if warning_note:
+                            st.warning(warning_note)
                     with c3:
                         if risk['severity'] == 'danger':
                             st.error("🚨 Over limit!")
                         elif risk['severity'] == 'warning':
                             st.warning("⚠️ High dose")
 
-                        if st.button("🗑️ Delete", key=f"del_{med_id}"):
-                            delete_medication(med_id)
-                            st.rerun()
+                        role = st.session_state.current_user.get('role') if st.session_state.current_user else None
+                        if role in ["doctor", "caregiver"]:
+                            if st.button("🗑️ Delete", key=f"del_{med_id}"):
+                                delete_medication(med_id)
+                                st.rerun()
+                        else:
+                            st.caption("Only doctors/caregivers can delete medications.")
         else:
             st.info("📭 No medications yet. Add your first one above!")
 

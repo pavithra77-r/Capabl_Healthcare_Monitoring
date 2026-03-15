@@ -4,3 +4,14 @@ langchain
 langchain-openai
 langchain-core
 openai
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+redis
+langgraph
+python-dotenv
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+python-multipart
